@@ -1,0 +1,64 @@
+# MADRE watch (Waveshare ESP32-C6-Touch-AMOLED-2.06), ESP-IDF build.
+
+CONFIG_IDF_TARGET="esp32c6"
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# Arduino core as a component.
+CONFIG_FREERTOS_HZ=1000
+CONFIG_AUTOSTART_ARDUINO=y
+# The USB port is ours (HWCDC "USBSerial"), and UART0's pins (GPIO16/17)
+# carry the accelerometer's interrupts on this board: no IDF console at all.
+CONFIG_ESP_CONSOLE_NONE=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# Bluetooth LE, NimBLE, one connection (the phone).
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+
+# ── Power ───────────────────────────────────────────────────────────────────
+# The point of this build: when nothing runs, the CPU sleeps (automatic light
+# sleep between ticks) and the BLE controller sleeps between adverts. The
+# firmware holds a lock while the screen is on, so animation is unaffected.
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_FREERTOS_IDLE_TIME_BEFORE_SLEEP=3
+CONFIG_PM_SLP_IRAM_OPT=y
+CONFIG_PM_RTOS_IDLE_OPT=y
+# The flash goes to deep power-down during the light sleeps too.
+CONFIG_ESP_SLEEP_POWER_DOWN_FLASH=y
+# Time spent in each power mode, for the "pm" USB command.
+CONFIG_PM_PROFILING=y
+CONFIG_BT_LE_SLEEP_ENABLE=y
+# Required for BLE light sleep: power the radio's MAC and baseband down too.
+CONFIG_ESP_PHY_MAC_BB_PD=y
+# No 32 kHz crystal on the board. The internal RC drifts too much for the
+# BLE sleep clock: adverts still went out, but after a few minutes asleep
+# connections from the phone failed until the screen woke the chip. The main
+# crystal stays on in light sleep instead: a little more current, reliable
+# timing (Espressif's recommendation without a 32 kHz crystal).
+CONFIG_BT_LE_LP_CLK_SRC_MAIN_XTAL=y
+CONFIG_RTC_CLK_SRC_INT_RC=y
+
+# ── Diagnostics ─────────────────────────────────────────────────────────────
+# A crash leaves a core dump in the coredump partition (read it with
+# "idf.py coredump-info"); a loop stuck for 8 s is a crash too, so the watch
+# restarts at once instead of staying dead.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=8
+
+# ── LVGL (only the stats panel and the speaker icon use it) ─────────────────
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_MEM_SIZE_KILOBYTES=64
+CONFIG_LV_DEF_REFR_PERIOD=33
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_28=y
+CONFIG_LV_FONT_DEFAULT_MONTSERRAT_14=y
+CONFIG_LV_USE_LOG=n

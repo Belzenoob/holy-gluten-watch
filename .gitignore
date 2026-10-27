@@ -1,0 +1,13 @@
+# ESP-IDF build output and components fetched by the component manager
+firmware/build/
+firmware/managed_components/
+firmware/sdkconfig
+firmware/sdkconfig.old
+# Waveshare board libraries (firmware/fetch-board-libs.sh)
+firmware/vendor/
+# Release binaries are attached to GitHub Releases, not committed
+dist/
+.DS_Store
+.vscode/
+.idea/
+*.log
