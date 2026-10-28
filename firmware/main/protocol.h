@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-// BLE contract with the app. Mirrors src/domain/watch.ts: change both together.
+// BLE contract with the Holy Gluten app: change both sides together.
 
 #define MADRE_DEVICE_NAME "MADRE"
 #define MADRE_FW_VERSION "0.3.0"

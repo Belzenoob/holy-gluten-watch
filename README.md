@@ -6,7 +6,8 @@ l'app per la panificazione: chi ha la scheda può costruirsi il proprio.
 
 Sull'orologio vive la mascotte del lievito madre: gli stessi occhi della
 scheda Lievito dell'app, con stati d'animo che dipendono dai rinfreschi,
-animazioni, suoni e gesti. L'app manda all'orologio la cronologia dei
+animazioni, suoni e gesti. Dal firmware 0.3.0 l'orologio disegna anche il
+**compagno** dell'account (Gufetto, Lumachina, Ranocchio…), come l'app. L'app manda all'orologio la cronologia dei
 rinfreschi, il nome del lievito e l'ora via Bluetooth LE; l'orologio non ha
 Wi-Fi, non ha account e non parla con nessun server.
 
@@ -23,9 +24,18 @@ Wi-Fi, non ha account e non parla con nessun server.
 
 ## Installare il firmware già compilato
 
-Scarica dalla pagina [Releases](../../releases/latest) il file
-`holy-gluten-watch-v1.0.0.bin`: è l'immagine completa (bootloader, tabella
-delle partizioni, app), da scrivere all'indirizzo `0x0`.
+Scarica dalla pagina [Releases](../../releases/latest) due file:
+
+- `holy-gluten-watch-v1.1.0.bin`: l'immagine completa (bootloader, tabella
+  delle partizioni, app), da scrivere all'indirizzo `0x0`;
+- `companions-pack.bin`: i disegni dei compagni, da scrivere all'indirizzo
+  `0x610000` (partizione `cmp`). Senza questo file l'orologio funziona e
+  mostra sempre Madre.
+
+Aggiornando da una versione 1.0.0 vanno scritti **entrambi**: la tabella delle
+partizioni è cambiata (la partizione `ffat`, mai usata, ora è `cmp`). Scrivere
+l'immagine a `0x0` azzera lo stato salvato sull'orologio (rinfreschi, umore):
+l'app lo rimanda alla prossima sincronizzazione.
 
 ### Dal browser (più semplice)
 
@@ -33,8 +43,9 @@ delle partizioni, app), da scrivere all'indirizzo `0x0`.
    sul computer.
 2. Collega la scheda con il cavo USB-C e premi **Connect**; scegli la porta
    della scheda (`USB JTAG/serial debug unit`).
-3. In **Flash Address** lascia `0x0`, scegli il file `.bin` e premi
-   **Program**.
+3. In **Flash Address** lascia `0x0` e scegli `holy-gluten-watch-v1.1.0.bin`.
+   Con **Add File** aggiungi una seconda riga: indirizzo `0x610000`, file
+   `companions-pack.bin`. Premi **Program**.
 4. Alla fine la scheda si riavvia e compare la mascotte; se lo schermo resta
    nero, premi **Hard reset** nella pagina.
 
@@ -42,7 +53,8 @@ delle partizioni, app), da scrivere all'indirizzo `0x0`.
 
 ```bash
 pip install esptool
-esptool --chip esp32c6 -p /dev/cu.usbmodem101 -b 460800 write-flash 0x0 holy-gluten-watch-v1.0.0.bin
+esptool --chip esp32c6 -p /dev/cu.usbmodem101 -b 460800 write-flash \
+  0x0 holy-gluten-watch-v1.1.0.bin 0x610000 companions-pack.bin
 ```
 
 Su Windows la porta è del tipo `COM5`, su Linux `/dev/ttyACM0`. Con esptool
@@ -62,6 +74,7 @@ parte:
 | `partition-table.bin` | `0x8000` |
 | `ota_data_initial.bin` | `0xe000` |
 | `madre.bin` | `0x10000` |
+| `companions-pack.bin` | `0x610000` |
 
 Impostazioni flash: 16 MB, modalità DIO/QIO, 80 MHz.
 
@@ -161,7 +174,8 @@ microfoni. Misure prese dal disegno quotato ufficiale della scheda.
 
 - L'orologio non contiene credenziali, chiavi o indirizzi di server: non ha
   Wi-Fi e parla solo Bluetooth LE con il telefono abbinato.
-- Riceve la cronologia dei rinfreschi, il nome del lievito e l'ora; non
+- Riceve la cronologia dei rinfreschi, il nome del lievito, l'ora e (dal
+  firmware 0.3.0) il nome del compagno scelto nell'app; non
   manda all'app altro che versione, batteria ed esito dell'ultima
   sincronizzazione.
 - Il protocollo è descritto in `firmware/main/protocol.h`.
@@ -172,6 +186,9 @@ microfoni. Misure prese dal disegno quotato ufficiale della scheda.
 - **Custodia** (`case/`): [CC BY-NC-SA 4.0](case/LICENSE). Puoi stamparla,
   modificarla e condividerla citando Holy Gluten, non venderla; le versioni
   modificate vanno condivise con la stessa licenza.
+- **Disegni dei compagni** (`companions-pack.bin`, allegato alle release): i
+  disegni di Holy Gluten, con la stessa licenza della custodia
+  ([CC BY-NC-SA 4.0](case/LICENSE)).
 
 Componenti di terze parti (scaricati al momento della compilazione, non
 inclusi qui): librerie della scheda Waveshare (Apache-2.0), core Arduino per

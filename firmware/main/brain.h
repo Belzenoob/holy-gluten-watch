@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 // The starter pet's "brain": a 1:1 port of src/features/starter/pet/brain.ts
-// and of reminderAt() in src/domain/starter.ts. Pure C++, no Arduino, so the
+// and of the app's starter reminder. Pure C++, no Arduino, so the
 // host tests in firmware/test/ run it on the Mac. Times are unix seconds;
 // `tz` is the phone's offset in minutes east of UTC.
 
