@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "voices.h"
 #include <Arduino.h>
 #include <Wire.h>
 #include <ESP_I2S.h>
@@ -18,6 +19,7 @@ static I2SClass i2s;
 static QueueHandle_t requests = nullptr;
 static bool codecReady = false;
 static bool muted = false;
+static volatile uint8_t voice = 0;
 
 static bool regAt(uint8_t chip, uint8_t r, uint8_t v) {
   Wire.beginTransmission(chip);
@@ -121,12 +123,25 @@ static void audioTask(void *) {
     amp(true);
     bool more = true;
     while (more) {
-      const SoundClip &clip = SOUNDS[s];
-      for (uint32_t at = 0; at < clip.count;) {
-        if (uxQueueMessagesWaiting(requests)) break;  // a newer sound wins
-        uint32_t n = clip.count - at < 512 ? clip.count - at : 512;
-        i2s.write((const uint8_t *)(clip.samples + at), n * sizeof(int16_t));
-        at += n;
+      static int16_t chunk[512];
+      uint32_t offset, total;
+      if (voice && voiceClip(voice, s, offset, total)) {
+        // The companion's own voice, streamed from flash.
+        for (uint32_t at = 0; at < total;) {
+          if (uxQueueMessagesWaiting(requests)) break;  // a newer sound wins
+          uint32_t n = total - at < 512 ? total - at : 512;
+          if (!voiceRead(offset, at, chunk, n)) break;
+          i2s.write((const uint8_t *)chunk, n * sizeof(int16_t));
+          at += n;
+        }
+      } else {
+        const SoundClip &clip = SOUNDS[s];
+        for (uint32_t at = 0; at < clip.count;) {
+          if (uxQueueMessagesWaiting(requests)) break;  // a newer sound wins
+          uint32_t n = clip.count - at < 512 ? clip.count - at : 512;
+          i2s.write((const uint8_t *)(clip.samples + at), n * sizeof(int16_t));
+          at += n;
+        }
       }
       more = xQueueReceive(requests, &s, 0) == pdTRUE && s < SND_COUNT;
     }
@@ -181,6 +196,7 @@ void audioBegin() {
     audioPinsPulled(true);
   }
   if (!codecReady) return;
+  voicesOpen();
   requests = xQueueCreate(2, sizeof(uint8_t));
   xTaskCreate(audioTask, "audio", 4096, nullptr, 3, nullptr);
 }
@@ -200,6 +216,10 @@ void audioSetMuted(bool m) {
     p.putBool("mute", m);
     p.end();
   }
+}
+
+void audioSetVoice(uint8_t v) {
+  voice = v;
 }
 
 void audioPlay(Sound s) {

@@ -689,6 +689,7 @@ static void showCompanion() {
   const Companion *c = companionSelect(wantedCompanion);
   if (eventLog && *wantedCompanion) USBSerial.printf("compagno %s: %s\n", wantedCompanion, c ? "ok" : companionError());
   pet.setCompanion(c, millis());
+  audioSetVoice(c ? c->voice : 0);
 }
 
 static void think() {

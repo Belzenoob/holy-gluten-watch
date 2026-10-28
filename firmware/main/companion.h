@@ -48,6 +48,7 @@ struct Companion {
   char id[13];
   bool ownEyes;    // it draws its eyes itself, as parts
   bool nocturnal;  // asleep in the day
+  uint8_t voice;   // its sound set (voices.h): 0 built-in, 1 rare, 2..4 the legendaries' own
   EyeBuild eyes;
   Expression expr[E_COUNT];
   uint32_t palette[PAL_ROWS][4];  // 0xRRGGBB: eye, pupil, accent, accentSoft

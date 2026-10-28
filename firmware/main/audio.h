@@ -12,6 +12,8 @@ bool audioMuted();
 void audioSetMuted(bool muted);
 // Plays a sound; a newer one cuts the current one short.
 void audioPlay(Sound s);
+// Which voice the next sounds use (0 = built-in; see voices.h). Set when the companion changes.
+void audioSetVoice(uint8_t voice);
 // The microphones' ADC (ES7210): standby from boot (no recording here); on = power-on state.
 void micPower(bool on);
 // I2S lines between sounds: pulled down, also in light sleep (the default

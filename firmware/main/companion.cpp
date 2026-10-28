@@ -5,7 +5,7 @@
 #endif
 
 // Blob layout (version 2), all little endian, offsets from the blob's start:
-//   "MCMP" | version u16 | flags u16 (bit0 ownEyes, bit1 nocturnal)
+//   "MCMP" | version u16 | flags u16 (bit0 ownEyes, bit1 nocturnal, bits 2-4 voice)
 //   eyes 7 × f32 | expr 13 × 6 × f32 | palette 10 × 4 × u32
 //   nParts u8, pad u8, pad u16
 //   per part: layer u8, paint u8, nSub u8, mask u8, stroke f32, nKeys u16,
@@ -169,6 +169,7 @@ static bool parseBlob(const uint8_t *b, uint32_t size, Companion &c) {
   uint16_t flags = rdU16(b + 6);
   c.ownEyes = flags & 1;
   c.nocturnal = flags & 2;
+  c.voice = (flags >> 2) & 7;
   uint32_t p = 8;
   float *e = &c.eyes.dx;  // EyeBuild is seven floats in the pack's order
   for (int i = 0; i < 7; i++, p += 4) e[i] = rdF32(b + p);
