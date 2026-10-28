@@ -34,7 +34,8 @@ static constexpr int REMINDER_DAYS = 5;
 int64_t reminderAt(int64_t lastRefresh, int tz);
 Mood moodFor(float hours, int64_t lastRefresh, int tz);
 // `times`: refresh times, any order; `n` of them.
-PetState petState(const int64_t *times, size_t n, int64_t now, int tz);
+// `nocturnal`: a companion that sleeps in the day (11–19) instead of the night.
+PetState petState(const int64_t *times, size_t n, int64_t now, int tz, bool nocturnal = false);
 int segments(float value, int total = 5);
 const char *petLine(LineKey key, uint32_t seed);
 // The status sentence under the pet, UTF-8, into `out`.

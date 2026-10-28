@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 #include "protocol.h"
 
@@ -18,3 +19,6 @@ struct Saved {
 
 void storeLoad(Saved &out);
 void storeSave(const Saved &s);
+// The companion's id the phone asked for (madre/comp); empty = Madre. Loading never fails.
+void storeLoadCompanion(char *out, size_t size);
+void storeSaveCompanion(const char *id);

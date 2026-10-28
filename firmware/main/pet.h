@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "brain.h"
+#include "companion.h"
 #include "face.h"
 #include "stage.h"
 #include "sounds.h"
@@ -20,7 +21,10 @@ class Pet {
  public:
   void begin(uint32_t ms, uint32_t seed);
   // From the brain: call on every refresh; only changes do something.
-  void setState(Mood mood, bool asleep, uint32_t ms);
+  void setState(Mood mood, bool asleep, uint32_t ms, bool atPeak = false);
+  // Whose face: a companion (its eyes, expressions, colours and parts) or nullptr for Madre.
+  // The pointer must stay valid while it is set. Switching jumps, it does not morph.
+  void setCompanion(const Companion *c, uint32_t ms);
   void update(uint32_t ms);
   void frame(StageFrame &f) const;
 
@@ -83,17 +87,27 @@ class Pet {
   void scheduleBlink(uint32_t ms);
   EyeInput readEye(int side) const;
   ExprName currentExpr() const;
+  float bounceNow() const;
+  void rowColors(uint32_t out[4]) const;
+  void resetFace(uint32_t ms);
 
   uint32_t rng_ = 1;
   uint32_t t0_ = 0, now_ = 0;
   Mood mood_ = NEWBORN;
-  bool asleep_ = false, hasState_ = false;
+  bool asleep_ = false, hasState_ = false, atPeak_ = false;
   Liveliness live_{};
 
   // Reaction sequence.
   Step seq_[6];
   int steps_ = 0, stepIndex_ = 0;
   uint32_t stepStart_ = 0;
+
+  // Whose face, and the part shapes it morphs between (the pack's state indices).
+  const Companion *comp_ = nullptr;
+  const Expression *exprs_ = EXPRESSIONS;
+  int stateFrom_ = 0, stateTo_ = 0;
+  uint32_t stateStart_ = 0;
+  float mix_ = 1;
 
   // Expression tween.
   ExprName expr_ = E_NEUTRAL;
@@ -103,6 +117,7 @@ class Pet {
 
   // Colours.
   uint32_t eyeFrom_ = 0, eyeTo_ = 0, pupilFrom_ = 0, pupilTo_ = 0, eye_ = 0, pupil_ = 0;
+  uint32_t accentFrom_ = 0, accentTo_ = 0, accentSoftFrom_ = 0, accentSoftTo_ = 0, accent_ = 0, accentSoft_ = 0;
   uint32_t colorStart_ = 0;
 
   // Motion.

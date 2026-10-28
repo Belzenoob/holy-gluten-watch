@@ -96,14 +96,49 @@ uint32_t Pet::rand32() {
 void Pet::begin(uint32_t ms, uint32_t seed) {
   rng_ = seed | 1;
   t0_ = now_ = ms;
-  cur_ = from_ = to_ = EXPRESSIONS[E_NEUTRAL];
+  cur_ = from_ = to_ = exprs_[E_NEUTRAL];
   Palette p = paletteFor(NEWBORN, false, E_NEUTRAL);
-  eye_ = eyeFrom_ = eyeTo_ = p.eye;
-  pupil_ = pupilFrom_ = pupilTo_ = p.pupil;
+  eye_ = eyeFrom_ = eyeTo_ = accent_ = accentFrom_ = accentTo_ = p.eye;
+  pupil_ = pupilFrom_ = pupilTo_ = accentSoft_ = accentSoftFrom_ = accentSoftTo_ = p.pupil;
   scheduleBlink(ms);
 }
 
-void Pet::setState(Mood mood, bool asleep, uint32_t ms) {
+// The colour row of the current state: eye, pupil, accent, accent soft. Madre has no accents.
+void Pet::rowColors(uint32_t out[4]) const {
+  if (comp_) {
+    memcpy(out, comp_->palette[paletteKey(mood_, asleep_, expr_)], 4 * sizeof(uint32_t));
+    return;
+  }
+  Palette p = paletteFor(mood_, asleep_, expr_);
+  out[0] = out[2] = p.eye;
+  out[1] = out[3] = p.pupil;
+}
+
+// Everything that follows the face jumps to the state's own: no tween.
+void Pet::resetFace(uint32_t ms) {
+  cur_ = from_ = to_ = exprs_[expr_];
+  exprStart_ = ms - EXPR_MS;
+  alive_ = aliveFrom_ = aliveTo_ = to_.lid >= 1 ? 0 : 1;
+  uint32_t c4[4];
+  rowColors(c4);
+  eye_ = eyeFrom_ = eyeTo_ = c4[0];
+  pupil_ = pupilFrom_ = pupilTo_ = c4[1];
+  accent_ = accentFrom_ = accentTo_ = c4[2];
+  accentSoft_ = accentSoftFrom_ = accentSoftTo_ = c4[3];
+  stateFrom_ = stateTo_ = companionState(mood_, asleep_, expr_, atPeak_);
+  stateStart_ = ms - EXPR_MS;
+  mix_ = 1;
+}
+
+void Pet::setCompanion(const Companion *c, uint32_t ms) {
+  if (!c && !comp_) return;  // (a new companion reuses the same object: always reset)
+  comp_ = c;
+  exprs_ = c ? c->expr : EXPRESSIONS;
+  if (hasState_) resetFace(ms);
+}
+
+void Pet::setState(Mood mood, bool asleep, uint32_t ms, bool atPeak) {
+  atPeak_ = atPeak;  // only picks the parts' shape: no reaction of its own
   if (hasState_ && mood == mood_ && asleep == asleep_) return;
   bool first = !hasState_;
   mood_ = mood;
@@ -119,11 +154,7 @@ void Pet::setState(Mood mood, bool asleep, uint32_t ms) {
   if (first) {
     // Start already in the right face and colours.
     expr_ = expressionFor(mood, asleep);
-    cur_ = from_ = to_ = EXPRESSIONS[expr_];
-    alive_ = aliveFrom_ = aliveTo_ = to_.lid >= 1 ? 0 : 1;
-    Palette p = paletteFor(mood, asleep, expr_);
-    eye_ = eyeFrom_ = eyeTo_ = p.eye;
-    pupil_ = pupilFrom_ = pupilTo_ = p.pupil;
+    resetFace(ms);
     bubbles_ = bubblesFrom_ = bubblesTo_;
     zzz_ = zzzFrom_ = zzzTo_ = asleep || mood == DORMANT ? 1 : 0;
   }
@@ -140,7 +171,7 @@ ExprName Pet::currentExpr() const {
 
 void Pet::setExpression(ExprName e, uint32_t ms) {
   from_ = cur_;
-  to_ = EXPRESSIONS[e];
+  to_ = exprs_[e];
   expr_ = e;
   exprStart_ = ms;
   aliveFrom_ = alive_;
@@ -283,17 +314,36 @@ void Pet::update(uint32_t ms) {
   cur_ = {mix(from_.lid, to_.lid, k),          mix(from_.tilt, to_.tilt, k),         mix(from_.low, to_.low, k),
           mix(from_.happy, to_.happy, k),      mix(from_.eyeScale, to_.eyeScale, k), mix(from_.pupil, to_.pupil, k)};
   alive_ = mix(aliveFrom_, aliveTo_, easeInOutQuad(clamp01((float)(ms - exprStart_) / ALIVE_MS)));
-  Palette p = paletteFor(mood_, asleep_, expr_);
-  if (p.eye != eyeTo_ || p.pupil != pupilTo_) {
+  uint32_t c4[4];
+  rowColors(c4);
+  if (c4[0] != eyeTo_ || c4[1] != pupilTo_ || c4[2] != accentTo_ || c4[3] != accentSoftTo_) {
     eyeFrom_ = eye_;
     pupilFrom_ = pupil_;
-    eyeTo_ = p.eye;
-    pupilTo_ = p.pupil;
+    accentFrom_ = accent_;
+    accentSoftFrom_ = accentSoft_;
+    eyeTo_ = c4[0];
+    pupilTo_ = c4[1];
+    accentTo_ = c4[2];
+    accentSoftTo_ = c4[3];
     colorStart_ = ms;
   }
   float kc = easeInOutQuad(clamp01((float)(ms - colorStart_) / COLOR_MS));
   eye_ = lerpColor(eyeFrom_, eyeTo_, kc);
   pupil_ = lerpColor(pupilFrom_, pupilTo_, kc);
+  accent_ = lerpColor(accentFrom_, accentTo_, kc);
+  accentSoft_ = lerpColor(accentSoftFrom_, accentSoftTo_, kc);
+
+  // The companion's parts morph to the shape of the new state, as the expression does.
+  if (comp_) {
+    int st = companionState(mood_, asleep_, expr_, atPeak_);
+    if (st != stateTo_) {
+      // Retargeted before the last morph ended: start from whichever end is nearer.
+      if (mix_ > 0.5f) stateFrom_ = stateTo_;
+      stateTo_ = st;
+      stateStart_ = ms;
+    }
+    mix_ = easeOutQuint(clamp01((float)(ms - stateStart_) / EXPR_MS));
+  }
 
   // Breathing: a slow float.
   if (live_.breathSeconds > 0) breathPhase_ = fmodf(breathPhase_ + dt / live_.breathSeconds, 1);
@@ -392,11 +442,15 @@ void Pet::update(uint32_t ms) {
   if (loving_ && ms - loveStart_ > LOVE_MS) loving_ = false;
 }
 
+float Pet::bounceNow() const {
+  return bounceMode_ == 1 ? bounceFrom_ + (bounceAmp_ - bounceFrom_) * easeOutQuad(clamp01((now_ - bounceStart_) / 110.0f)) : bounceMode_ == 2 ? bounce_.x : 0;
+}
+
 EyeInput Pet::readEye(int side) const {
   float t = (now_ - t0_) / 1000.0f;
   float lx = (side < 0 ? lookLX_.x : lookRX_.x) + sinf(t * 0.9f + side * 1.7f) * 0.035f * alive_;
   float ly = (side < 0 ? lookLY_.x : lookRY_.x) + cosf(t * 0.7f + side) * 0.03f * alive_;
-  float b = bounceMode_ == 1 ? bounceFrom_ + (bounceAmp_ - bounceFrom_) * easeOutQuad(clamp01((now_ - bounceStart_) / 110.0f)) : bounceMode_ == 2 ? bounce_.x : 0;
+  float b = bounceNow();
   EyeInput e;
   e.side = side;
   e.lid = cur_.lid;
@@ -410,6 +464,7 @@ EyeInput Pet::readEye(int side) const {
   e.blink = blink_;
   e.dy = breath_ * 3 - b * 10 + press_.x * 4;
   e.stretch = 1 + breath_ * 0.012f - blink_ * 0.07f + b * 0.09f - press_.x * 0.08f;
+  e.build = comp_ ? &comp_->eyes : nullptr;
   return e;
 }
 
@@ -418,6 +473,26 @@ void Pet::frame(StageFrame &f) const {
   f.eyes[1] = eyeShape(readEye(1));
   f.eye = eye_;
   f.pupil = pupil_;
+
+  // The companion's parts: the shapes it morphs between and the inputs that move them.
+  // The parts take breath and bounce from their deltas (they already follow the eyes the way
+  // the app's parts do), so only the finger's squash is added here, to keep them with the eyes.
+  f.comp = CompDraw();
+  if (comp_) {
+    float t = (now_ - t0_) / 1000.0f;
+    CompDraw &cd = f.comp;
+    cd.c = comp_;
+    cd.stateA = stateFrom_;
+    cd.stateB = stateTo_;
+    cd.mix = mix_;
+    cd.gazeX = (lookLX_.x + lookRX_.x) * 0.5f + sinf(t * 0.9f) * 0.035f * alive_;
+    cd.gazeY = (lookLY_.x + lookRY_.x) * 0.5f + cosf(t * 0.7f) * 0.03f * alive_;
+    cd.breath = breath_;
+    cd.bounce = bounceNow();
+    cd.dy = press_.x * 4;
+    cd.accent = accent_;
+    cd.accentSoft = accentSoft_;
+  }
 
   const float W = STAGE_W, H = STAGE_H, eyesY = STAGE_EYES_Y;
   float clock = (now_ - t0_) / 1000.0f;

@@ -10,6 +10,8 @@ static constexpr float ON_TIME_HOURS = REMINDER_DAYS * 24 + 12;
 static constexpr float DORMANT_HOURS = 9 * 24;
 static constexpr int NIGHT_FROM = 23;
 static constexpr int NIGHT_UNTIL = 7;
+static constexpr int DAY_FROM = 11;
+static constexpr int DAY_UNTIL = 19;
 // Reminders never ring between these hours; they move to the evening before.
 static constexpr int QUIET_FROM = 21;
 static constexpr int QUIET_UNTIL = 8;
@@ -55,10 +57,10 @@ static Stage stageFor(int ageDays) {
   return VETERANA;
 }
 
-PetState petState(const int64_t *input, size_t n, int64_t now, int tz) {
+PetState petState(const int64_t *input, size_t n, int64_t now, int tz, bool nocturnal) {
   PetState s;
   int hourOfDay = localHour(now, tz);
-  bool night = hourOfDay >= NIGHT_FROM || hourOfDay < NIGHT_UNTIL;
+  bool night = nocturnal ? hourOfDay >= DAY_FROM && hourOfDay < DAY_UNTIL : hourOfDay >= NIGHT_FROM || hourOfDay < NIGHT_UNTIL;
   if (n == 0) return s;
 
   int64_t times[64];

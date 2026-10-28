@@ -46,10 +46,13 @@ static const Palette EYES[] = {
 static const Palette NIGHT = {0x8C86FF, 0xF5D45E};
 static const Palette CROSS = {0xFF3B30, 0xFFE14A};
 
+uint8_t paletteKey(Mood mood, bool asleep, ExprName expression) {
+  return expression == E_ANNOYED || expression == E_GRUMPY ? PAL_CROSS : asleep ? PAL_ASLEEP : (uint8_t)mood;
+}
+
 Palette paletteFor(Mood mood, bool asleep, ExprName expression) {
-  if (expression == E_ANNOYED || expression == E_GRUMPY) return CROSS;
-  if (asleep) return NIGHT;
-  return EYES[mood];
+  uint8_t key = paletteKey(mood, asleep, expression);
+  return key == PAL_CROSS ? CROSS : key == PAL_ASLEEP ? NIGHT : EYES[key];
 }
 
 Liveliness livelinessFor(Mood mood, bool asleep) {
@@ -68,31 +71,36 @@ Liveliness livelinessFor(Mood mood, bool asleep) {
 
 // ─── Geometry (geometry.ts) ─────────────────────────────────────────────────
 
-static constexpr float EYE_DX = 47;
-static constexpr float EYE_RX = 44;
-static constexpr float EYE_RY = 52;
-static constexpr float LEFT_SCALE = 0.94f;  // a touch of asymmetry
-static constexpr float MARGIN = 2;          // cuts start outside an open eye
+const EyeBuild MADRE_EYES = {47, EYE_CY, 44, 52, 0.94f, 0.36f, 1};  // leftScale: a touch of asymmetry
+static constexpr float MARGIN = 2;                                   // cuts start outside an open eye
+
+static inline const EyeBuild &buildOf(const EyeInput &e) {
+  return e.build ? *e.build : MADRE_EYES;
+}
 
 static float clampf(float v, float lo, float hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
 Ellipse eyeEllipse(const EyeInput &e) {
-  float s = e.eyeScale * (e.side < 0 ? LEFT_SCALE : 1);
-  return {VIEW_W / 2 + e.side * EYE_DX, EYE_CY + e.dy, EYE_RX * s * (1 + (1 - e.stretch) * 0.6f), EYE_RY * s * e.stretch};
+  const EyeBuild &k = buildOf(e);
+  float s = e.eyeScale * (e.side < 0 ? k.leftScale : 1);
+  return {VIEW_W / 2 + e.side * k.dx, k.cy + e.dy, k.rx * s * (1 + (1 - e.stretch) * 0.6f), k.ry * s * e.stretch};
 }
 
+// A round pupil, or a slit when pupilAspect is below 1 (rx = r * aspect).
 Ellipse pupilCircle(const EyeInput &e) {
+  const EyeBuild &k = buildOf(e);
   Ellipse o = eyeEllipse(e);
-  float r = o.rx * 0.36f * e.pupil;
+  float r = o.rx * k.pupilRatio * e.pupil;
+  float rx = r * k.pupilAspect;
   float lx = e.lookX, ly = e.lookY;
   float m = sqrtf(lx * lx + ly * ly);
   if (m > 1) {
     lx /= m;
     ly /= m;
   }
-  return {o.cx + lx * (o.rx - r - 6), o.cy + ly * (o.ry - r - 6), r, r};
+  return {o.cx + lx * (o.rx - rx - 6), o.cy + ly * (o.ry - r - 6), rx, r};
 }
 
 float lidAmount(const EyeInput &e) {

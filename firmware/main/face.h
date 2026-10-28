@@ -21,6 +21,10 @@ ExprName expressionFor(Mood mood, bool asleep);
 struct Palette {
   uint32_t eye, pupil;
 };
+// Rows of the colour table (expressions.ts PaletteKey): the eight moods, then night and anger.
+enum PaletteRow : uint8_t { PAL_ASLEEP = 8, PAL_CROSS = 9, PAL_ROWS = 10 };
+// Which row a state uses: anger first, then night, then the mood.
+uint8_t paletteKey(Mood mood, bool asleep, ExprName expression);
 Palette paletteFor(Mood mood, bool asleep, ExprName expression);
 
 struct Liveliness {
@@ -37,7 +41,19 @@ Liveliness livelinessFor(Mood mood, bool asleep);
 
 static constexpr float VIEW_W = 240;
 static constexpr float VIEW_H = 180;
-static constexpr float EYE_CY = 92;
+static constexpr float EYE_CY = 92;  // Madre's eye height; the stage is laid out around it
+
+// The eyes' build (EyeShape in geometry.ts). Madre's is the default; a companion
+// brings its own (companion.h).
+struct EyeBuild {
+  float dx;           // half the distance between the eyes' centres
+  float cy;           // height of the eyes' centres
+  float rx, ry;       // radii of a right eye at scale 1
+  float leftScale;    // the left eye's scale
+  float pupilRatio;   // pupil radius over the eye's horizontal radius
+  float pupilAspect;  // pupil width over height: 1 round, lower for a slit
+};
+extern const EyeBuild MADRE_EYES;
 
 struct EyeInput {
   int side;  // -1 left, +1 right
@@ -46,6 +62,7 @@ struct EyeInput {
   float blink;         // 0..1
   float dy;            // breathing / bounce offset
   float stretch;       // squash & stretch
+  const EyeBuild *build = nullptr;  // nullptr = Madre's
 };
 
 struct Ellipse {

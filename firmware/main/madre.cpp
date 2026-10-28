@@ -19,6 +19,7 @@
 #include "HWCDC.h"
 #include "protocol.h"
 #include "brain.h"
+#include "companion.h"
 #include "pet.h"
 #include "stage.h"
 #include "store.h"
@@ -118,6 +119,8 @@ static bool statsOn = false;
 
 static int battery = -1;
 static PetState brain;
+// The companion the phone asked for (empty = Madre), and whether it is the one on screen.
+static char wantedCompanion[16] = "";
 
 
 // Power locks: "awake" keeps the CPU out of light sleep and "fast" at full
@@ -680,15 +683,25 @@ static void reportStatus(bool ok, const char *err) {
   linkReportStatus(saved.pending, saved.nPending, battery, ok, err);
 }
 
+// Shows the wanted companion: its blob is mapped from the pack and the pet takes its face. An
+// unknown id, no pack or a damaged blob quietly leaves Madre.
+static void showCompanion() {
+  const Companion *c = companionSelect(wantedCompanion);
+  if (eventLog && *wantedCompanion) USBSerial.printf("compagno %s: %s\n", wantedCompanion, c ? "ok" : companionError());
+  pet.setCompanion(c, millis());
+}
+
 static void think() {
   int64_t now = clockNow();
-  brain = now ? petState(saved.refreshes, saved.nRefreshes, now, saved.tz) : PetState();
+  const Companion *c = companionCurrent();
+  brain = now ? petState(saved.refreshes, saved.nRefreshes, now, saved.tz, c && c->nocturnal) : PetState();
   if (previewOn && millis() - previewSince > PREVIEW_MAX_MS) previewOn = false;
   if (previewOn) {
     brain.mood = previewMood;
     brain.asleep = previewNight;
+    brain.atPeak = false;
   }
-  pet.setState(brain.mood, brain.asleep, millis());
+  pet.setState(brain.mood, brain.asleep, millis(), brain.atPeak);
   uiSetMeters(segments(brain.satiety), segments(brain.vitality));
 }
 
@@ -710,6 +723,16 @@ static void applyState(const std::string &payload) {
   }
   saved.nPending = 0;  // the watch does not log refreshes
   storeSave(saved);
+
+  // The companion (optional "c"; absent = Madre), kept across reboots.
+  char wanted[sizeof wantedCompanion];
+  snprintf(wanted, sizeof wanted, "%s", (const char *)(doc["c"] | ""));
+  if (strcmp(wanted, wantedCompanion) != 0) {
+    memcpy(wantedCompanion, wanted, sizeof wanted);
+    storeSaveCompanion(wanted);
+    showCompanion();
+    wake();
+  }
 
   // Test panel: a forced state while it is open, and one-off reactions.
   JsonVariant preview = doc["preview"];
@@ -984,10 +1007,12 @@ void setup() {
   noteBoot();
   enableLoopWDT();
   storeLoad(saved);
+  storeLoadCompanion(wantedCompanion, sizeof wantedCompanion);
   uiBegin();
   audioBegin();
   wakeBegin();  // the side key and the accelerometer as wake sources
   pet.begin(millis(), esp_random());
+  showCompanion();
   battery = batteryPercent();
   think();
   linkStart();
@@ -1004,6 +1029,7 @@ void setup() {
 
 // Debug over USB (115200):
 //   stato            one-line report and frame timing
+//   compagno <id>    show that companion (micio, boo…); "madre" or nothing: Madre
 //   carica <json>    applies a state exactly as if it came over BLE
 //   tocca            a tap on the eyes
 //   scuoti           a shake
@@ -1042,9 +1068,18 @@ static void serialCommands() {
       partMax[p] = 0;
     }
     USBSerial.println();
-    USBSerial.printf("MADRE %s, %s, umore %d, sonno %d, ore %.1f, rinfreschi %u, ora %lld, tz %d, collegato %d, batteria %d, audio %d, heap %u\n", MADRE_FW_VERSION,
+    USBSerial.printf("MADRE %s, %s, umore %d, sonno %d, ore %.1f, rinfreschi %u, ora %lld, tz %d, collegato %d, batteria %d, audio %d, heap %u, compagno %s\n", MADRE_FW_VERSION,
                      saved.name, brain.mood, brain.asleep, brain.hours, saved.nRefreshes, (long long)clockNow(), saved.tz, linkConnected(), battery,
-                     audioReady(), (unsigned)ESP.getFreeHeap());
+                     audioReady(), (unsigned)ESP.getFreeHeap(), companionCurrent() ? companionCurrent()->id : "madre");
+  } else if (cmd.startsWith("compagno")) {
+    // "compagno micio" shows that companion (kept for next time); "compagno" alone, or "madre", goes back to Madre.
+    String id = cmd.substring(8);
+    id.trim();
+    snprintf(wantedCompanion, sizeof wantedCompanion, "%s", id.c_str());
+    storeSaveCompanion(wantedCompanion);
+    showCompanion();
+    think();
+    USBSerial.printf("compagno: %s\n", companionCurrent() ? companionCurrent()->id : "madre (nessun pacchetto o id sconosciuto)");
   } else if (cmd.startsWith("carica ")) {
     applyState(std::string(cmd.c_str() + 7));
   } else if (cmd == "tocca") {
